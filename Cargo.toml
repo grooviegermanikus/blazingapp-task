@@ -1,0 +1,18 @@
+[package]
+name = "blazingapp-task"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+base64 = "0.22.1"
+anchor-lang = "=0.29.0"
+anchor-spl = "=0.29.0"
+raydium-amm-v3 = { git = "https://github.com/raydium-io/raydium-clmm", features = [
+    "no-entrypoint",
+    "cpi",
+] }
+solana-program = ">=1.16, <1.18"
+spl-token = "=4.0.0"
+spl-memo = "=4.0.0"
+num_enum = "=0.7.0"
+ahash = "=0.8.6"
