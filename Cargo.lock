@@ -472,10 +472,12 @@ dependencies = [
  "ahash 0.8.6",
  "anchor-lang",
  "anchor-spl",
+ "anyhow",
  "base64 0.22.1",
  "num_enum 0.7.0",
  "raydium-amm-v3",
  "solana-program",
+ "solana-sdk",
  "spl-memo",
  "spl-token",
 ]
