@@ -18,11 +18,11 @@ const AMM_CONFIG_INDEX: i16 = 4;
 fn main() -> anyhow::Result<()> {
     let rpc_client = RpcClient::new("https://api.mainnet-beta.solana.com/");
 
-    let amm_config_key = pda_amm_config(AMM_CONFIG_INDEX);
+    let amm_config_key = calc_pda_amm_config_account(AMM_CONFIG_INDEX);
 
     let token_0 = Pubkey::from_str("ZxBon4vcf3DVcrt63fJU52ywYm9BKZC6YuXDhb3fomo").unwrap();
     let token_1 = Pubkey::from_str("So11111111111111111111111111111111111111112").unwrap();
-    let pool_id_account = calc_pool_id_account(Some(token_0), Some(token_1), &amm_config_key).unwrap();
+    let pool_id_account = calc_pda_pool_id_account(Some(token_0), Some(token_1), &amm_config_key).unwrap();
     let input_token = token_1;
     let output_token = token_0;
 
@@ -30,17 +30,15 @@ fn main() -> anyhow::Result<()> {
 
 
     let load_accounts = vec![
-        input_token,
-        output_token,
         amm_config_key,
         pool_id_account,
         tickarray_bitmap_extension_pubkey,
     ];
     let rsps = rpc_client.get_multiple_accounts(&load_accounts)?;
 
-    let amm_config: AmmConfig = deserialize_anchor_account(rsps[2].as_ref().unwrap()).unwrap();
-    let pool_state: PoolState = deserialize_anchor_account(rsps[3].as_ref().unwrap()).unwrap();
-    let tickarray_bitmap_extension = deserialize_anchor_account(rsps[4].as_ref().unwrap()).unwrap();
+    let amm_config: AmmConfig = deserialize_anchor_account(rsps[0].as_ref().unwrap()).unwrap();
+    let pool_state: PoolState = deserialize_anchor_account(rsps[1].as_ref().unwrap()).unwrap();
+    let tickarray_bitmap_extension = deserialize_anchor_account(rsps[2].as_ref().unwrap()).unwrap();
 
 
     // from solscan "amount"
@@ -122,45 +120,20 @@ fn main() -> anyhow::Result<()> {
 }
 
 
-fn load_pool_account(pool_account_pubkey: &Pubkey) -> PoolState {
-    let pool_account = RpcClient::new("https://api.mainnet-beta.solana.com/")
-        .get_account(pool_account_pubkey).unwrap();
-
-    let data = &pool_account.data;
-
-    PoolState::try_deserialize(&mut data.as_slice()).expect("Pool Account")
-}
-
-fn load_bitmap_extension(pool_account_pubkey: &Pubkey) -> TickArrayBitmapExtension {
-
-    let extension_account_pubkey = TickArrayBitmapExtension::key(pool_account_pubkey.clone());
-
-    let rpc_client = RpcClient::new("https://api.mainnet-beta.solana.com/");
-    let pool_account = rpc_client
-        .get_account(&extension_account_pubkey)
-        .expect("Failed to fetch extension account");
-
-    let data = &pool_account.data;
-
-    TickArrayBitmapExtension::try_deserialize(&mut data.as_slice()).expect("TickArrayBitmapExtension Account")
-}
-
-fn calc_tick_account(pool_id_account: &Pubkey, index: i32) -> Pubkey {
-    let (pda_pubkey, _bump_seed) =
-        Pubkey::find_program_address(
+fn calc_pda_amm_config_account(config_index: i16) -> Pubkey {
+    let (amm_config_key, __bump) = Pubkey::find_program_address(
         &[
-            raydium_amm_v3::states::TICK_ARRAY_SEED.as_bytes(),
-            pool_id_account.to_bytes().as_ref(),
-            &index.to_be_bytes(),
+            raydium_amm_v3::states::AMM_CONFIG_SEED.as_bytes(),
+            &config_index.to_be_bytes(),
         ],
         &raydium_amm_v3::ID,
     );
 
-    pda_pubkey
+    amm_config_key
 }
 
 
-fn calc_pool_id_account(mut mint0: Option<Pubkey>, mut mint1: Option<Pubkey>, amm_config_key: &Pubkey) -> Option<Pubkey> {
+fn calc_pda_pool_id_account(mut mint0: Option<Pubkey>, mut mint1: Option<Pubkey>, amm_config_key: &Pubkey) -> Option<Pubkey> {
 
     let pool_id_account = if mint0 != None && mint1 != None {
         if mint0.unwrap() > mint1.unwrap() {
@@ -187,17 +160,13 @@ fn calc_pool_id_account(mut mint0: Option<Pubkey>, mut mint1: Option<Pubkey>, am
     pool_id_account
 }
 
-pub fn deserialize_anchor_account<T: AccountDeserialize>(account: &Account) -> anyhow::Result<T> {
-    let mut data: &[u8] = &account.data;
-    T::try_deserialize(&mut data).map_err(Into::into)
-}
+
 
 
 
 fn load_cur_and_next_five_tick_array(
     rpc_client: &RpcClient,
     pool_id_account: &Pubkey,
-    // pool_config: &ClientConfig,
     pool_state: &PoolState,
     tickarray_bitmap_extension: &TickArrayBitmapExtension,
     zero_for_one: bool,
@@ -256,16 +225,9 @@ fn load_cur_and_next_five_tick_array(
     tick_arrays
 }
 
-fn pda_amm_config(config_index: i16) -> Pubkey {
-    let (amm_config_key, __bump) = Pubkey::find_program_address(
-        &[
-            raydium_amm_v3::states::AMM_CONFIG_SEED.as_bytes(),
-            &config_index.to_be_bytes(),
-        ],
-        &raydium_amm_v3::ID,
-    );
-
-    amm_config_key
+fn deserialize_anchor_account<T: AccountDeserialize>(account: &Account) -> anyhow::Result<T> {
+    let mut data: &[u8] = &account.data;
+    T::try_deserialize(&mut data).map_err(Into::into)
 }
 
 #[test]
