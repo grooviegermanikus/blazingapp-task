@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use anchor_lang::AccountDeserialize;
 use anyhow::Result;
 use raydium_amm_v3::libraries::fixed_point_64;
@@ -23,6 +25,7 @@ use spl_token_2022::{
 };
 use std::collections::VecDeque;
 use std::ops::{DerefMut, Mul, Neg};
+use tracing::trace;
 
 pub fn deserialize_anchor_account<T: AccountDeserialize>(account: &Account) -> Result<T> {
     let mut data: &[u8] = &account.data;
@@ -154,84 +157,6 @@ pub fn get_transfer_fee<'data, S: BaseState>(
     fee
 }
 
-pub fn get_account_extensions<'data, S: BaseState>(
-    account_state: &StateWithExtensions<'data, S>,
-) -> Vec<ExtensionStruct> {
-    let mut extensions: Vec<ExtensionStruct> = Vec::new();
-    let extension_types = account_state.get_extension_types().unwrap();
-    println!("extension_types:{:?}", extension_types);
-    for extension_type in extension_types {
-        match extension_type {
-            ExtensionType::ConfidentialTransferAccount => {
-                let extension = account_state
-                    .get_extension::<ConfidentialTransferAccount>()
-                    .unwrap();
-                extensions.push(ExtensionStruct::ConfidentialTransferAccount(*extension));
-            }
-            ExtensionType::ConfidentialTransferMint => {
-                let extension = account_state
-                    .get_extension::<ConfidentialTransferMint>()
-                    .unwrap();
-                extensions.push(ExtensionStruct::ConfidentialTransferMint(*extension));
-            }
-            ExtensionType::CpiGuard => {
-                let extension = account_state.get_extension::<CpiGuard>().unwrap();
-                extensions.push(ExtensionStruct::CpiGuard(*extension));
-            }
-            ExtensionType::DefaultAccountState => {
-                let extension = account_state
-                    .get_extension::<DefaultAccountState>()
-                    .unwrap();
-                extensions.push(ExtensionStruct::DefaultAccountState(*extension));
-            }
-            ExtensionType::ImmutableOwner => {
-                let extension = account_state.get_extension::<ImmutableOwner>().unwrap();
-                extensions.push(ExtensionStruct::ImmutableOwner(*extension));
-            }
-            ExtensionType::InterestBearingConfig => {
-                let extension = account_state
-                    .get_extension::<InterestBearingConfig>()
-                    .unwrap();
-                extensions.push(ExtensionStruct::InterestBearingConfig(*extension));
-            }
-            ExtensionType::MemoTransfer => {
-                let extension = account_state.get_extension::<MemoTransfer>().unwrap();
-                extensions.push(ExtensionStruct::MemoTransfer(*extension));
-            }
-            ExtensionType::MintCloseAuthority => {
-                let extension = account_state.get_extension::<MintCloseAuthority>().unwrap();
-                extensions.push(ExtensionStruct::MintCloseAuthority(*extension));
-            }
-            ExtensionType::NonTransferable => {
-                let extension = account_state.get_extension::<NonTransferable>().unwrap();
-                extensions.push(ExtensionStruct::NonTransferable(*extension));
-            }
-            ExtensionType::NonTransferableAccount => {
-                let extension = account_state
-                    .get_extension::<NonTransferableAccount>()
-                    .unwrap();
-                extensions.push(ExtensionStruct::NonTransferableAccount(*extension));
-            }
-            ExtensionType::PermanentDelegate => {
-                let extension = account_state.get_extension::<PermanentDelegate>().unwrap();
-                extensions.push(ExtensionStruct::PermanentDelegate(*extension));
-            }
-            ExtensionType::TransferFeeConfig => {
-                let extension = account_state.get_extension::<TransferFeeConfig>().unwrap();
-                extensions.push(ExtensionStruct::TransferFeeConfig(*extension));
-            }
-            ExtensionType::TransferFeeAmount => {
-                let extension = account_state.get_extension::<TransferFeeAmount>().unwrap();
-                extensions.push(ExtensionStruct::TransferFeeAmount(*extension));
-            }
-            _ => {
-                println!("unkonwn extension:{:#?}", extension_type);
-            }
-        }
-    }
-    extensions
-}
-
 pub const Q_RATIO: f64 = 1.0001;
 
 pub fn tick_to_price(tick: i32) -> f64 {
@@ -333,7 +258,7 @@ pub fn get_out_put_amount_and_remaining_accounts(
         tickarray_bitmap_extension,
         tick_arrays,
     )?;
-    println!("tick_array_start_index:{:?}", tick_array_start_index_vec);
+    trace!("tick_array_start_index:{:?}", tick_array_start_index_vec);
 
     Ok((amount_calculated, tick_array_start_index_vec))
 }
@@ -509,7 +434,6 @@ fn swap_compute(
                 state.liquidity =
                     liquidity_math::add_delta(state.liquidity, liquidity_net).unwrap();
             }
-
 
             state.tick = if zero_for_one {
                 step.tick_next - 1
