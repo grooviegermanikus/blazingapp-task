@@ -59,17 +59,6 @@ pub fn calculate_tick_array_accounts(
     let tickarray_bitmap_extension =
         deserialize_anchor_account(tickarray_bitmap_extension_account.as_ref().unwrap()).unwrap();
 
-    // from solscan "amount"
-    // 0.01 SOL
-    // let amount_specified = 10000000;
-    // let sqrt_price_limit_x64: u128 = 1190568305734560417006;
-    // let sqrt_price_limit_x64: u128 =     901697932954476299104;
-    // let sqrt_price_limit_x64 = price_to_sqrt_price_x64(
-    //     // https://raydium.io/swap/?inputMint=sol&outputMint=ZxBon4vcf3DVcrt63fJU52ywYm9BKZC6YuXDhb3fomo
-    //     2.775e6,
-    //     pool_state.mint_decimals_0,
-    //     pool_state.mint_decimals_1);
-
     // Raydium SQL UI uses "limit=0"
     // sqrt_price_limit_x64 must be smaller than current price
     let sqrt_price_limit_x64 = 0;

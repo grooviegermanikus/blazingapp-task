@@ -17,12 +17,17 @@ fn main() -> anyhow::Result<()> {
 
     let direction = SwapDirection::Buy;
     let input_token = Pubkey::from_str("So11111111111111111111111111111111111111112").unwrap();
+    // FOMO
     let output_token = Pubkey::from_str("ZxBon4vcf3DVcrt63fJU52ywYm9BKZC6YuXDhb3fomo").unwrap();
     // 0.01 SOL
     let amount = 10000000;
 
     let tick_array_accounts =
-        calculate_tick_array_accounts(&rpc_client, &input_token, &output_token, direction, amount)?;
+        calculate_tick_array_accounts(
+            &rpc_client,
+            &input_token, &output_token,
+            direction, amount
+        )?;
 
     println!("Swapping (Buy) {} for {}", output_token, input_token);
     println!("Tick Array Accounts involved:");
