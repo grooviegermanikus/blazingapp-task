@@ -66,7 +66,7 @@ fn main() -> anyhow::Result<()> {
         &pool_state,
         &tickarray_bitmap_extension,
         zero_for_one,
-    );
+    )?;
 
     let current_price_sqrt = pool_state.sqrt_price_x64;
     let current_price = sqrt_price_x64_to_price(
@@ -162,68 +162,74 @@ fn calc_pda_pool_id_account(mut mint0: Option<Pubkey>, mut mint1: Option<Pubkey>
 
 
 
-
-
 fn load_cur_and_next_five_tick_array(
     rpc_client: &RpcClient,
     pool_id_account: &Pubkey,
     pool_state: &PoolState,
     tickarray_bitmap_extension: &TickArrayBitmapExtension,
     zero_for_one: bool,
-) -> VecDeque<TickArrayState> {
-    let (_, mut current_vaild_tick_array_start_index) = pool_state
-        .get_first_initialized_tick_array(&Some(*tickarray_bitmap_extension), zero_for_one)
-        .unwrap();
+) -> anyhow::Result<VecDeque<TickArrayState>> {
+    let (_, mut current_valid_tick_array_start_index) = pool_state
+        .get_first_initialized_tick_array(&Some(*tickarray_bitmap_extension), zero_for_one)?;
+
     let mut tick_array_keys = Vec::new();
     tick_array_keys.push(
         Pubkey::find_program_address(
             &[
                 raydium_amm_v3::states::TICK_ARRAY_SEED.as_bytes(),
                 pool_id_account.to_bytes().as_ref(),
-                &current_vaild_tick_array_start_index.to_be_bytes(),
+                &current_valid_tick_array_start_index.to_be_bytes(),
             ],
             &raydium_amm_v3::ID,
         )
             .0,
     );
+
     let mut max_array_size = 5;
     while max_array_size != 0 {
         let next_tick_array_index = pool_state
             .next_initialized_tick_array_start_index(
                 &Some(*tickarray_bitmap_extension),
-                current_vaild_tick_array_start_index,
+                current_valid_tick_array_start_index,
                 zero_for_one,
-            )
-            .unwrap();
-        if next_tick_array_index.is_none() {
+            )?;
+
+        if let Some(next_index) = next_tick_array_index {
+            current_valid_tick_array_start_index = next_index;
+            tick_array_keys.push(
+                Pubkey::find_program_address(
+                    &[
+                        raydium_amm_v3::states::TICK_ARRAY_SEED.as_bytes(),
+                        pool_id_account.to_bytes().as_ref(),
+                        &current_valid_tick_array_start_index.to_be_bytes(),
+                    ],
+                    &raydium_amm_v3::ID,
+                )
+                    .0,
+            );
+            max_array_size -= 1;
+        } else {
             break;
         }
-        current_vaild_tick_array_start_index = next_tick_array_index.unwrap();
-        tick_array_keys.push(
-            Pubkey::find_program_address(
-                &[
-                    raydium_amm_v3::states::TICK_ARRAY_SEED.as_bytes(),
-                    pool_id_account.to_bytes().as_ref(),
-                    &current_vaild_tick_array_start_index.to_be_bytes(),
-                ],
-                &raydium_amm_v3::ID,
-            )
-                .0,
-        );
-        max_array_size -= 1;
     }
-    let tick_array_rsps = rpc_client.get_multiple_accounts(&tick_array_keys).unwrap();
+
+    let tick_array_rsps = rpc_client.get_multiple_accounts(&tick_array_keys)?;
     let mut tick_arrays = VecDeque::new();
+
     for tick_array in tick_array_rsps {
-        let tick_array_state =
-            deserialize_anchor_account::<raydium_amm_v3::states::TickArrayState>(
-                &tick_array.unwrap(),
-            )
-                .unwrap();
-        tick_arrays.push_back(tick_array_state);
+        if let Some(account) = tick_array {
+            let tick_array_state = deserialize_anchor_account::<raydium_amm_v3::states::TickArrayState>(&account)?;
+            tick_arrays.push_back(tick_array_state);
+        } else {
+            return Err(anyhow::anyhow!("Missing account data for tick array"));
+        }
     }
-    tick_arrays
+
+    Ok(tick_arrays)
 }
+
+
+
 
 fn deserialize_anchor_account<T: AccountDeserialize>(account: &Account) -> anyhow::Result<T> {
     let mut data: &[u8] = &account.data;
