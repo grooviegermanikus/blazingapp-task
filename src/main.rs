@@ -1,4 +1,5 @@
 mod utils;
+mod math;
 
 use std::collections::VecDeque;
 use std::str::FromStr;
@@ -10,12 +11,12 @@ use solana_program::instruction::AccountMeta;
 use solana_program::pubkey::Pubkey;
 use solana_rpc_client::rpc_client::RpcClient;
 use solana_sdk::account::Account;
-use crate::utils::get_out_put_amount_and_remaining_accounts;
+use crate::utils::{get_out_put_amount_and_remaining_accounts, price_to_sqrt_price_x64, price_to_x64, sqrt_price_x64_to_price};
 
 fn main() -> anyhow::Result<()> {
     let rpc_client = RpcClient::new("https://api.mainnet-beta.solana.com/");
 
-    let amm_config_key = Pubkey::from_str("9iFER3bpjf1PTTCQCfTRu17EJgvsxo9pVyA9QWwEuX4x").unwrap();
+    // let amm_config_key = Pubkey::from_str("9iFER3bpjf1PTTCQCfTRu17EJgvsxo9pVyA9QWwEuX4x").unwrap();
 
     let token_0 = Pubkey::from_str("ZxBon4vcf3DVcrt63fJU52ywYm9BKZC6YuXDhb3fomo").unwrap();
     let token_1 = Pubkey::from_str("So11111111111111111111111111111111111111112").unwrap();
@@ -25,10 +26,11 @@ fn main() -> anyhow::Result<()> {
 
     let tickarray_bitmap_extension_pubkey = TickArrayBitmapExtension::key(pool_id_account.clone());
 
+
     let load_accounts = vec![
         input_token,
         output_token,
-        amm_config_key,
+        Pubkey::new_unique(),// amm_config_key, not used
         pool_id_account,
         tickarray_bitmap_extension_pubkey,
     ];
@@ -37,11 +39,22 @@ fn main() -> anyhow::Result<()> {
     let pool_state: PoolState = deserialize_anchor_account(rsps[3].as_ref().unwrap()).unwrap();
     let tickarray_bitmap_extension = deserialize_anchor_account(rsps[4].as_ref().unwrap()).unwrap();
 
+    let amm_config: AmmConfig = deserialize_anchor_account(&rpc_client.get_account(&pool_state.amm_config).unwrap()).unwrap();
+
+
 
     // from solscan "amount"
-    let amount_specified = 34733440235;
+    // 0.01 SOL
+    let amount_specified = 10000000;
     // let sqrt_price_limit_x64: u128 = 1190568305734560417006;
-    let sqrt_price_limit_x64: u128 =     901697932954476299104;
+    // let sqrt_price_limit_x64: u128 =     901697932954476299104;
+    // let sqrt_price_limit_x64 = price_to_sqrt_price_x64(
+    //     // https://raydium.io/swap/?inputMint=sol&outputMint=ZxBon4vcf3DVcrt63fJU52ywYm9BKZC6YuXDhb3fomo
+    //     2.775e6,
+    //     pool_state.mint_decimals_0,
+    //     pool_state.mint_decimals_1);
+    let sqrt_price_limit_x64 = 0;
+    // let sqrt_price_limit_x64: u128 =     price_to_x64();
     let base_in = true;
 
 
@@ -57,11 +70,12 @@ fn main() -> anyhow::Result<()> {
         zero_for_one,
     );
 
-    // we need only fee atm
-    let simple_config = AmmConfig::default();
-
     let current_price_sqrt = pool_state.sqrt_price_x64;
-    println!("current_price_sqrt: {}", current_price_sqrt);
+    let current_price = sqrt_price_x64_to_price(
+        current_price_sqrt,
+        pool_state.mint_decimals_0,
+        pool_state.mint_decimals_1);
+    println!("current_price: {}", current_price);
 
     let (mut other_amount_threshold, tick_array_indexs) =
         get_out_put_amount_and_remaining_accounts(
@@ -69,7 +83,7 @@ fn main() -> anyhow::Result<()> {
             Some(sqrt_price_limit_x64),
             zero_for_one,
             base_in,
-            &simple_config,
+            &amm_config,
             &pool_state,
             &tickarray_bitmap_extension,
             &mut tick_arrays,
