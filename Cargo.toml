@@ -7,11 +7,14 @@ edition = "2021"
 base64 = "0.22.1"
 anchor-lang = "=0.29.0"
 anchor-spl = "=0.29.0"
+# TODO add tag
 raydium-amm-v3 = { git = "https://github.com/raydium-io/raydium-clmm", features = [
     "no-entrypoint",
     "cpi",
 ] }
+#raydium-amm-client = { package = "client", git = "https://github.com/raydium-io/raydium-clmm" }
 solana-program = ">=1.16, <1.18"
+spl-token-2022 = { version = "0.9.0", features = ["no-entrypoint"]}
 solana-sdk = ">=1.16, <1.18"
 solana-rpc-client = ">=1.16, <1.18"
 spl-token = "=4.0.0"

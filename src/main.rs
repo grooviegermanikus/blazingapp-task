@@ -1,14 +1,120 @@
+mod utils;
+
+use std::collections::VecDeque;
 use std::str::FromStr;
 use anchor_lang::AccountDeserialize;
-use raydium_amm_v3::states::{PoolState, TickArrayBitmapExtension, TickArrayState};
+use raydium_amm_v3::states::{AmmConfig, PoolState, TickArrayBitmapExtension, TickArrayState};
 use itertools::Itertools;
 use raydium_amm_v3::libraries::get_tick_at_sqrt_price;
 use solana_program::instruction::AccountMeta;
 use solana_program::pubkey::Pubkey;
 use solana_rpc_client::rpc_client::RpcClient;
+use solana_sdk::account::Account;
+use crate::utils::get_out_put_amount_and_remaining_accounts;
+
+fn main() -> anyhow::Result<()> {
+    let rpc_client = RpcClient::new("https://api.mainnet-beta.solana.com/");
+
+    let amm_config_key = Pubkey::from_str("9iFER3bpjf1PTTCQCfTRu17EJgvsxo9pVyA9QWwEuX4x").unwrap();
+
+    let token_0 = Pubkey::from_str("ZxBon4vcf3DVcrt63fJU52ywYm9BKZC6YuXDhb3fomo").unwrap();
+    let token_1 = Pubkey::from_str("So11111111111111111111111111111111111111112").unwrap();
+    let pool_id_account = calc_pool_id_account(Some(token_0), Some(token_1)).unwrap();
+    let input_token = token_1;
+    let output_token = token_0;
+
+    let tickarray_bitmap_extension_pubkey = TickArrayBitmapExtension::key(pool_id_account.clone());
+
+    let load_accounts = vec![
+        input_token,
+        output_token,
+        amm_config_key,
+        pool_id_account,
+        tickarray_bitmap_extension_pubkey,
+    ];
+    let rsps = rpc_client.get_multiple_accounts(&load_accounts)?;
+
+    let pool_state: PoolState = deserialize_anchor_account(rsps[3].as_ref().unwrap()).unwrap();
+    let tickarray_bitmap_extension = deserialize_anchor_account(rsps[4].as_ref().unwrap()).unwrap();
+
+
+    // from solscan "amount"
+    let amount_specified = 34733440235;
+    // let sqrt_price_limit_x64: u128 = 1190568305734560417006;
+    let sqrt_price_limit_x64: u128 =     901697932954476299104;
+    let base_in = true;
+
+
+    let zero_for_one = input_token == pool_state.token_mint_0
+        && output_token == pool_state.token_mint_1;
+
+
+    let mut tick_arrays = load_cur_and_next_five_tick_array(
+        &rpc_client,
+        &pool_id_account,
+        &pool_state,
+        &tickarray_bitmap_extension,
+        zero_for_one,
+    );
+
+    // we need only fee atm
+    let simple_config = AmmConfig::default();
+
+    let current_price_sqrt = pool_state.sqrt_price_x64;
+    println!("current_price_sqrt: {}", current_price_sqrt);
+
+    let (mut other_amount_threshold, tick_array_indexs) =
+        get_out_put_amount_and_remaining_accounts(
+            amount_specified,
+            Some(sqrt_price_limit_x64),
+            zero_for_one,
+            base_in,
+            &simple_config,
+            &pool_state,
+            &tickarray_bitmap_extension,
+            &mut tick_arrays,
+        )
+            .unwrap();
+    // println!(
+    //     "amount:{}, other_amount_threshold:{}",
+    //     amount, other_amount_threshold
+    // );
+
+
+    let mut remaining_accounts = Vec::new();
+    remaining_accounts.push(AccountMeta::new_readonly(
+        tickarray_bitmap_extension_pubkey,
+        false,
+    ));
+    let mut accounts = tick_array_indexs
+        .into_iter()
+        .map(|index| {
+            AccountMeta::new(
+                Pubkey::find_program_address(
+                    &[
+                        raydium_amm_v3::states::TICK_ARRAY_SEED.as_bytes(),
+                        pool_id_account.to_bytes().as_ref(),
+                        &index.to_be_bytes(),
+                    ],
+                    &raydium_amm_v3::ID,
+                )
+                    .0,
+                false,
+            )
+        })
+        .collect();
+    remaining_accounts.append(&mut accounts);
+
+    for acc in remaining_accounts {
+        println!("- {}", acc.pubkey);
+
+    }
+
+    Ok(())
+}
 
 // https://solscan.io/tx/2piXisrMFFDKNvsnyVSCWhEA5u1arQ1jEmsJDXogoKn6YrYFndFsbXzh5jMvLXyZJMkR115UsbvQ1ZSSQVshMktM
-fn main() -> anyhow::Result<()> {
+fn main2() -> anyhow::Result<()> {
 
 
     let b64 = include_str!("tickarrayaccount.dat");
@@ -169,4 +275,73 @@ fn calc_pool_id_account(mut mint0: Option<Pubkey>, mut mint1: Option<Pubkey>) ->
     };
 
     pool_id_account
+}
+
+pub fn deserialize_anchor_account<T: AccountDeserialize>(account: &Account) -> anyhow::Result<T> {
+    let mut data: &[u8] = &account.data;
+    T::try_deserialize(&mut data).map_err(Into::into)
+}
+
+
+
+fn load_cur_and_next_five_tick_array(
+    rpc_client: &RpcClient,
+    pool_id_account: &Pubkey,
+    // pool_config: &ClientConfig,
+    pool_state: &PoolState,
+    tickarray_bitmap_extension: &TickArrayBitmapExtension,
+    zero_for_one: bool,
+) -> VecDeque<TickArrayState> {
+    let (_, mut current_vaild_tick_array_start_index) = pool_state
+        .get_first_initialized_tick_array(&Some(*tickarray_bitmap_extension), zero_for_one)
+        .unwrap();
+    let mut tick_array_keys = Vec::new();
+    tick_array_keys.push(
+        Pubkey::find_program_address(
+            &[
+                raydium_amm_v3::states::TICK_ARRAY_SEED.as_bytes(),
+                pool_id_account.to_bytes().as_ref(),
+                &current_vaild_tick_array_start_index.to_be_bytes(),
+            ],
+            &raydium_amm_v3::ID,
+        )
+            .0,
+    );
+    let mut max_array_size = 5;
+    while max_array_size != 0 {
+        let next_tick_array_index = pool_state
+            .next_initialized_tick_array_start_index(
+                &Some(*tickarray_bitmap_extension),
+                current_vaild_tick_array_start_index,
+                zero_for_one,
+            )
+            .unwrap();
+        if next_tick_array_index.is_none() {
+            break;
+        }
+        current_vaild_tick_array_start_index = next_tick_array_index.unwrap();
+        tick_array_keys.push(
+            Pubkey::find_program_address(
+                &[
+                    raydium_amm_v3::states::TICK_ARRAY_SEED.as_bytes(),
+                    pool_id_account.to_bytes().as_ref(),
+                    &current_vaild_tick_array_start_index.to_be_bytes(),
+                ],
+                &raydium_amm_v3::ID,
+            )
+                .0,
+        );
+        max_array_size -= 1;
+    }
+    let tick_array_rsps = rpc_client.get_multiple_accounts(&tick_array_keys).unwrap();
+    let mut tick_arrays = VecDeque::new();
+    for tick_array in tick_array_rsps {
+        let tick_array_state =
+            deserialize_anchor_account::<raydium_amm_v3::states::TickArrayState>(
+                &tick_array.unwrap(),
+            )
+                .unwrap();
+        tick_arrays.push_back(tick_array_state);
+    }
+    tick_arrays
 }
