@@ -6,23 +6,18 @@ edition = "2021"
 [dependencies]
 tracing = "0.1.41"
 tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
+anyhow = "1.0.98"
+itertools = "0.14.0"
 arrayref = "0.3.6"
-base64 = "0.22.1"
+
 anchor-lang = "=0.29.0"
 anchor-spl = "=0.29.0"
 # TODO add tag
-raydium-amm-v3 = { git = "https://github.com/raydium-io/raydium-clmm", features = [
-    "no-entrypoint",
-    "cpi",
-] }
-#raydium-amm-client = { package = "client", git = "https://github.com/raydium-io/raydium-clmm" }
 solana-program = ">=1.16, <1.18"
-spl-token-2022 = { version = "0.9.0", features = ["no-entrypoint"]}
 solana-sdk = ">=1.16, <1.18"
+spl-token-2022 = { version = "0.9.0", features = ["no-entrypoint"]}
 solana-rpc-client = ">=1.16, <1.18"
 spl-token = "=4.0.0"
-spl-memo = "=4.0.0"
-num_enum = "=0.7.0"
-ahash = "=0.8.6"
-anyhow = "1.0.98"
-itertools = "0.14.0"
+
+raydium-amm-v3 = { git = "https://github.com/raydium-io/raydium-clmm", default-features = false }
+
