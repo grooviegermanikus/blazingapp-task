@@ -22,7 +22,7 @@ fn main() -> anyhow::Result<()> {
 
     let token_0 = Pubkey::from_str("ZxBon4vcf3DVcrt63fJU52ywYm9BKZC6YuXDhb3fomo").unwrap();
     let token_1 = Pubkey::from_str("So11111111111111111111111111111111111111112").unwrap();
-    let pool_id_account = calc_pda_pool_id_account(Some(token_0), Some(token_1), &amm_config_key).unwrap();
+    let pool_id_account = calc_pda_pool_id_account(token_0, token_1, &amm_config_key);
     let input_token = token_1;
     let output_token = token_0;
 
@@ -133,33 +133,25 @@ fn calc_pda_amm_config_account(config_index: i16) -> Pubkey {
 }
 
 
-fn calc_pda_pool_id_account(mut mint0: Option<Pubkey>, mut mint1: Option<Pubkey>, amm_config_key: &Pubkey) -> Option<Pubkey> {
-
-    let pool_id_account = if mint0 != None && mint1 != None {
-        if mint0.unwrap() > mint1.unwrap() {
-            let temp_mint = mint0;
-            mint0 = mint1;
-            mint1 = temp_mint;
-        }
-        Some(
-            Pubkey::find_program_address(
-                &[
-                    raydium_amm_v3::states::POOL_SEED.as_bytes(),
-                    amm_config_key.to_bytes().as_ref(),
-                    mint0.unwrap().to_bytes().as_ref(),
-                    mint1.unwrap().to_bytes().as_ref(),
-                ],
-                &raydium_amm_v3::ID,
-            )
-                .0,
-        )
+fn calc_pda_pool_id_account(mint0: Pubkey, mint1: Pubkey, amm_config_key: &Pubkey) -> Pubkey {
+    let (mint0, mint1) = if mint0 < mint1 {
+        (mint0, mint1)
     } else {
-        None
+        (mint1, mint0)
     };
+
+    let (pool_id_account, __bump) = Pubkey::find_program_address(
+        &[
+            raydium_amm_v3::states::POOL_SEED.as_bytes(),
+            amm_config_key.to_bytes().as_ref(),
+            mint0.to_bytes().as_ref(),
+            mint1.to_bytes().as_ref(),
+        ],
+        &raydium_amm_v3::ID,
+    );
 
     pool_id_account
 }
-
 
 
 fn load_cur_and_next_five_tick_array(
