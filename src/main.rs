@@ -2,7 +2,6 @@ mod math;
 mod utils;
 mod tick_accounts_utils;
 
-use anchor_lang::AccountDeserialize;
 use solana_program::pubkey::Pubkey;
 use solana_rpc_client::rpc_client::RpcClient;
 use std::str::FromStr;
